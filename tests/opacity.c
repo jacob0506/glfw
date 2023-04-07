@@ -1,5 +1,5 @@
 //========================================================================
-// Event wait timeout test
+// Window opacity test program
 // Copyright (c) Camilla Löwy <elmindreda@glfw.org>
 //
 // This software is provided 'as-is', without any express or implied
@@ -22,16 +22,22 @@
 //    distribution.
 //
 //========================================================================
-//
-// This test is intended to verify that waiting for events with timeout works
-//
-//========================================================================
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
-#include <time.h>
-#include <math.h>
+#define NK_IMPLEMENTATION
+#define NK_INCLUDE_FIXED_TYPES
+#define NK_INCLUDE_FONT_BAKING
+#define NK_INCLUDE_DEFAULT_FONT
+#define NK_INCLUDE_DEFAULT_ALLOCATOR
+#define NK_INCLUDE_VERTEX_BUFFER_OUTPUT
+#define NK_INCLUDE_STANDARD_VARARGS
+#include <nuklear.h>
+
+#define NK_GLFW_GL2_IMPLEMENTATION
+#include <nuklear_glfw_gl2.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -40,29 +46,20 @@ static void error_callback(int error, const char* description)
     fprintf(stderr, "Error: %s\n", description);
 }
 
-static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
-{
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, GLFW_TRUE);
-}
-
-static float nrand(void)
-{
-    return (float) rand() / (float) RAND_MAX;
-}
-
-int main(void)
+int main(int argc, char** argv)
 {
     GLFWwindow* window;
-
-    srand((unsigned int) time(NULL));
+    struct nk_context* nk;
+    struct nk_font_atlas* atlas;
 
     glfwSetErrorCallback(error_callback);
 
     if (!glfwInit())
         exit(EXIT_FAILURE);
 
-    window = glfwCreateWindow(640, 480, "Event Wait Timeout Test", NULL, NULL);
+    glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
+
+    window = glfwCreateWindow(400, 400, "Opacity", NULL, NULL);
     if (!window)
     {
         glfwTerminate();
@@ -71,26 +68,39 @@ int main(void)
 
     glfwMakeContextCurrent(window);
     gladLoadGLLoader((GLADloadproc) glfwGetProcAddress);
-    glfwSetKeyCallback(window, key_callback);
+    glfwSwapInterval(1);
+
+    nk = nk_glfw3_init(window, NK_GLFW3_INSTALL_CALLBACKS);
+    nk_glfw3_font_stash_begin(&atlas);
+    nk_glfw3_font_stash_end();
 
     while (!glfwWindowShouldClose(window))
     {
         int width, height;
-        float r = nrand(), g = nrand(), b = nrand();
-        float l = (float) sqrt(r * r + g * g + b * b);
+        struct nk_rect area;
 
-        glfwGetFramebufferSize(window, &width, &height);
+        glfwGetWindowSize(window, &width, &height);
+        area = nk_rect(0.f, 0.f, (float) width, (float) height);
 
-        glViewport(0, 0, width, height);
-        glClearColor(r / l, g / l, b / l, 1.f);
         glClear(GL_COLOR_BUFFER_BIT);
-        glfwSwapBuffers(window);
+        nk_glfw3_new_frame();
+        if (nk_begin(nk, "", area, 0))
+        {
+            float opacity = glfwGetWindowOpacity(window);
+            nk_layout_row_dynamic(nk, 30, 2);
+            if (nk_slider_float(nk, 0.f, &opacity, 1.f, 0.001f))
+                glfwSetWindowOpacity(window, opacity);
+            nk_labelf(nk, NK_TEXT_LEFT, "%0.3f", opacity);
+        }
 
+        nk_end(nk);
+        nk_glfw3_render(NK_ANTI_ALIASING_ON);
+
+        glfwSwapBuffers(window);
         glfwWaitEventsTimeout(1.0);
     }
 
-    glfwDestroyWindow(window);
-
+    nk_glfw3_shutdown();
     glfwTerminate();
     exit(EXIT_SUCCESS);
 }
